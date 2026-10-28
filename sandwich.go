@@ -82,6 +82,9 @@ func parseSwaps(logs []*types.Log) []swapDir {
 		sig := l.Topics[0]
 		switch {
 		case v2Swap[sig]:
+			if len(l.Data) < 128 {
+				continue
+			}
 			// Swap(sender, amount0In, amount1In, amount0Out, amount1Out, to)
 			// bscexorcist parity: token0->token1 iff token0 came in (delta0<0) and token1 went out (delta1>0),
 			// using all four amounts rather than the amount0In>amount1In shortcut.
@@ -91,10 +94,16 @@ func parseSwaps(logs []*types.Log) []swapDir {
 			delta1 := new(big.Int).Sub(a1out, a1in)
 			out = append(out, swapDir{common.BytesToHash(l.Address.Bytes()), delta0.Sign() < 0 && delta1.Sign() > 0})
 		case v3Swap[sig]:
+			if len(l.Data) < 160 {
+				continue
+			}
 			// bscexorcist parity: zeroForOne = amount0 > amount1 (both int256).
 			a0, a1 := asInt256(word(l.Data, 0)), asInt256(word(l.Data, 1))
 			out = append(out, swapDir{common.BytesToHash(l.Address.Bytes()), a0.Cmp(a1) > 0})
 		case v4Swap[sig]:
+			if len(l.Topics) != 3 || len(l.Data) < 64 {
+				continue
+			}
 			pool := common.BytesToHash(l.Address.Bytes())
 			if len(l.Topics) > 1 {
 				pool = l.Topics[1] // v4/Infinity pool id is indexed

@@ -52,7 +52,7 @@ separate bundles or public transactions. Unrelated strategies can match the
 same directional pattern. A nil result means only that this pattern was absent.
 
 Pool keys follow the implementation: V2/V3 use the emitter address; V4 uses the
-indexed pool ID (or emitter fallback), without manager-address namespacing;
+indexed pool ID, without manager-address namespacing;
 DODO combines ten-byte prefixes of sorted token addresses; FourMeme uses the
 token address. These keys can conflate distinct pools. Event counts are not
 volume-weighted. Input validation and bundle ordering belong to the caller.
@@ -62,3 +62,7 @@ volume-weighted. Input validation and bundle ordering belong to the caller.
 This repository's filter and tests are MIT licensed; see [LICENSE](LICENSE).
 Dependencies retain their own licenses. No third-party dependency source is
 vendored here.
+
+Malformed V2 logs with fewer than 128 data bytes and V3 logs with fewer than
+160 data bytes are skipped. V4 logs require exactly three topics and at least
+64 data bytes; logs failing either condition are skipped.

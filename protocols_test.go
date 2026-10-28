@@ -52,12 +52,12 @@ func TestRecognizedProtocolDirections(t *testing.T) {
 			&types.Log{Address: pool, Topics: []common.Hash{sig}, Data: words(0, 10, 9, 0)}, common.BytesToHash(pool.Bytes()))
 	}
 	for sig := range v3Swap {
-		check("v3/"+sig.Hex(), &types.Log{Address: pool, Topics: []common.Hash{sig}, Data: words(10, -9)},
-			&types.Log{Address: pool, Topics: []common.Hash{sig}, Data: words(-9, 10)}, common.BytesToHash(pool.Bytes()))
+		check("v3/"+sig.Hex(), &types.Log{Address: pool, Topics: []common.Hash{sig}, Data: words(10, -9, 0, 0, 0)},
+			&types.Log{Address: pool, Topics: []common.Hash{sig}, Data: words(-9, 10, 0, 0, 0)}, common.BytesToHash(pool.Bytes()))
 	}
 	for sig := range v4Swap {
-		check("v4/"+sig.Hex(), &types.Log{Address: pool, Topics: []common.Hash{sig, id}, Data: words(10, -9)},
-			&types.Log{Address: pool, Topics: []common.Hash{sig, id}, Data: words(-9, 10)}, id)
+		check("v4/"+sig.Hex(), &types.Log{Address: pool, Topics: []common.Hash{sig, id, common.Hash{}}, Data: words(10, -9)},
+			&types.Log{Address: pool, Topics: []common.Hash{sig, id, common.Hash{}}, Data: words(-9, 10)}, id)
 	}
 	a := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	b := common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -117,5 +117,40 @@ func TestV2UsesAllFourAmounts(t *testing.T) {
 	got := parseSwaps([]*types.Log{v2log(10, 1, 11, 2)})
 	if len(got) != 1 || got[0].token0To1 {
 		t.Fatal("direction must use both net amount deltas")
+	}
+}
+
+func TestSwapLogLengthGuards(t *testing.T) {
+	for _, protocol := range []struct {
+		name       string
+		signatures map[common.Hash]bool
+		minimum    int
+		topics     int
+	}{{"v2", v2Swap, 128, 1}, {"v3", v3Swap, 160, 1}, {"v4", v4Swap, 64, 3}} {
+		for sig := range protocol.signatures {
+			t.Run(protocol.name+"/"+sig.Hex(), func(t *testing.T) {
+				topics := make([]common.Hash, protocol.topics)
+				topics[0] = sig
+				for size := 0; size < protocol.minimum; size++ {
+					if got := parseSwaps([]*types.Log{{Topics: topics, Data: make([]byte, size)}}); len(got) != 0 {
+						t.Fatalf("short data length %d produced swaps: %+v", size, got)
+					}
+				}
+				for _, size := range []int{protocol.minimum, protocol.minimum + 32} {
+					if got := parseSwaps([]*types.Log{{Topics: topics, Data: make([]byte, size)}}); len(got) != 1 {
+						t.Fatalf("valid data length %d was skipped", size)
+					}
+				}
+				if protocol.name == "v4" {
+					for _, count := range []int{1, 2, 4} {
+						malformed := make([]common.Hash, count)
+						malformed[0] = sig
+						if got := parseSwaps([]*types.Log{{Topics: malformed, Data: make([]byte, protocol.minimum)}}); len(got) != 0 {
+							t.Fatalf("invalid topic count %d produced swaps: %+v", count, got)
+						}
+					}
+				}
+			})
+		}
 	}
 }
